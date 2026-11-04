@@ -62,3 +62,21 @@ describe("rate limit", () => {
     expect(allow("2.2.2.2", now)).toBe(true);
   });
 });
+
+import { extractText, parseJsonText } from "@/lib/ai";
+
+describe("model reply parsing", () => {
+  const json = '{"reason":"salary_late","confidence":0.9,"language":"en","explanation":"ok"}';
+  it("reads a Responses API reply", () => {
+    const data = { output: [{ type: "reasoning", content: [{ text: "ignore" }] }, { type: "message", content: [{ type: "output_text", text: json }] }] };
+    expect(extractText(data)).toBe(json);
+  });
+  it("reads output_text and chat completions replies", () => {
+    expect(extractText({ output_text: json })).toBe(json);
+    expect(extractText({ choices: [{ message: { content: json } }] })).toBe(json);
+    expect(extractText({})).toBe("");
+  });
+  it("parses JSON wrapped in code fences", () => {
+    expect(parseJsonText("```json\n" + json + "\n```")).toMatchObject({ reason: "salary_late" });
+  });
+});

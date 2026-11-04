@@ -25,34 +25,64 @@ Rules:
 Reply with JSON only: {"reason": one of salary_late|money_tight|debit_failed|market_worry|returns_doubt|app_confusion|life_event|wants_advice|wants_to_exit|unclear, "confidence": 0-1, "language": "en"|"hi"|"hinglish", "explanation": string}.
 Use wants_advice when the user asks what to buy, which fund, or whether to continue.`;
 
-/** Shared JSON call to the configured model. Throws "no_key" when unconfigured. */
+/** Pulls the model's text out of either a Responses API or a chat completions reply. */
+export function extractText(data: unknown): string {
+  const d = data as {
+    output_text?: string;
+    output?: { type?: string; content?: { type?: string; text?: string }[] }[];
+    choices?: { message?: { content?: string } }[];
+  };
+  if (typeof d?.output_text === "string" && d.output_text) return d.output_text;
+  const parts: string[] = [];
+  for (const item of d?.output ?? []) {
+    if (item?.type && item.type !== "message") continue;
+    for (const c of item?.content ?? []) if (typeof c?.text === "string") parts.push(c.text);
+  }
+  if (parts.length) return parts.join("");
+  return d?.choices?.[0]?.message?.content ?? "";
+}
+
+/** Some providers wrap JSON in code fences or add text; take the outermost object. */
+export function parseJsonText(content: string): unknown {
+  const start = content.indexOf("{");
+  const end = content.lastIndexOf("}");
+  return JSON.parse(start >= 0 && end > start ? content.slice(start, end + 1) : content);
+}
+
+/**
+ * Shared JSON call to the configured model. Throws "no_key" when unconfigured.
+ * AI_API_STYLE=responses (default) uses POST {base}/responses (OpenRouter Responses API);
+ * AI_API_STYLE=chat uses POST {base}/chat/completions.
+ */
 export async function chatJson(system: string, user: string): Promise<unknown> {
   const key = process.env.AI_API_KEY;
   const base = process.env.AI_BASE_URL;
   const model = process.env.AI_MODEL;
   if (!key || !base || !model) throw new Error("no_key");
+  const chat = process.env.AI_API_STYLE === "chat";
+  const messages = [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
   try {
-    const res = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
+    const headers: Record<string, string> = { "content-type": "application/json", authorization: `Bearer ${key}` };
+    // Optional OpenRouter attribution headers.
+    if (process.env.AI_SITE_URL) headers["HTTP-Referer"] = process.env.AI_SITE_URL;
+    if (process.env.AI_SITE_TITLE) headers["X-OpenRouter-Title"] = process.env.AI_SITE_TITLE;
+    const res = await fetch(`${base.replace(/\/$/, "")}/${chat ? "chat/completions" : "responses"}`, {
       method: "POST",
       signal: ctrl.signal,
-      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        max_tokens: 250,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
+      headers,
+      body: JSON.stringify(
+        chat
+          ? { model, temperature: 0, max_tokens: 250, response_format: { type: "json_object" }, messages }
+          : { model, input: messages, max_output_tokens: 400 },
+      ),
     });
     if (!res.ok) throw new Error(`http_${res.status}`);
-    const data = await res.json();
-    const content: string = data?.choices?.[0]?.message?.content ?? "";
-    return JSON.parse(content);
+    return parseJsonText(extractText(await res.json()));
   } finally {
     clearTimeout(timer);
   }
