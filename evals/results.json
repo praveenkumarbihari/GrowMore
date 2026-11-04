@@ -1,0 +1,1 @@
+{ "labelled": 0, "agreement": null, "safetyFailures": 0, "note": "Not run yet. Label evals/golden.json by hand, then npm run eval." }

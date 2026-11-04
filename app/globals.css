@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .btn-primary {
+    @apply rounded-full bg-calm px-4 py-3 font-semibold text-white shadow-sm disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply rounded-full border border-slate-300 bg-white px-4 py-3 font-semibold text-ink disabled:opacity-50;
+  }
+  .chip {
+    @apply rounded-full border border-slate-300 px-3 py-2 text-sm disabled:opacity-50;
+  }
+}
+
+body {
+  background: #e2e8f0;
+  color: #1f2937;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif;
+}

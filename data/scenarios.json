@@ -1,0 +1,9 @@
+{
+  "sip": { "amount": 1000, "month": 4, "totalMonths": 12, "status": "active", "reasonNote": "my first bike" },
+  "chips": [
+    { "label": "Salary is late", "text": "Salary is late this month" },
+    { "label": "Money is tight", "text": "Money is tight this month" },
+    { "label": "Debit failed", "text": "My SIP debit failed" },
+    { "label": "Worried about the market", "text": "I am worried about the market" }
+  ]
+}
