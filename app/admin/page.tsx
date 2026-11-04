@@ -1,4 +1,5 @@
 import { sessionSummary } from "@/lib/db";
+import { BASE } from "@/lib/base";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin", robots: { index: false } };
@@ -17,7 +18,7 @@ export default function Admin() {
         {rows.length} sessions · Heartbeat take-up {pct(heartbeat)} · Completion {pct(completed)} · Fallback rate{" "}
         {pct(fallback)}
       </p>
-      <a className="text-calm underline" href="/api/admin/export">Download CSV</a>
+      <a className="text-calm underline" href={`${BASE}/api/admin/export`}>Download CSV</a>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full border-collapse text-left">
           <thead>

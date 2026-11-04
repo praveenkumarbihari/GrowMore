@@ -12,6 +12,7 @@ import {
 } from "@/lib/rules";
 import type { Reason } from "@/lib/schema";
 import { faqText, SUGGESTED, type FaqId } from "@/lib/faq";
+import { BASE } from "@/lib/base";
 
 type Ai =
   | { kind: "ok"; reason: Reason; explanation: string }
@@ -180,7 +181,7 @@ export default function Flow() {
   const listRef = useRef<HTMLDivElement>(null);
 
   function log(event: string, extra: Record<string, unknown> = {}) {
-    fetch("/api/event", {
+    fetch(`${BASE}/api/event`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sessionId, event, reason: reasonRef.current, fallback: fallbackRef.current, ...extra }),
@@ -206,7 +207,7 @@ export default function Flow() {
       if (w) setWatch(JSON.parse(w));
     } catch {}
     log("session_start");
-    fetch("/api/score")
+    fetch(`${BASE}/api/score`)
       .then((r) => r.json())
       .then((s) => {
         if (s.available) {
@@ -231,7 +232,7 @@ export default function Flow() {
     setText(t);
     log("reason_submitted");
     try {
-      const res = await fetch("/api/explain", {
+      const res = await fetch(`${BASE}/api/explain`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: t, sip: { amount: sip.amount, month: sip.month, status: sip.status } }),
@@ -300,7 +301,7 @@ export default function Flow() {
       setChat((c) => [...c, { from: "me", text: q }]);
       setChatBusy(true);
       try {
-        const res = await fetch("/api/faq", {
+        const res = await fetch(`${BASE}/api/faq`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ q, ctx: faqCtx }),
