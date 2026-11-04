@@ -13,6 +13,7 @@ import {
 import type { Reason } from "@/lib/schema";
 import { faqText, SUGGESTED, type FaqId } from "@/lib/faq";
 import { BASE } from "@/lib/base";
+import { RANGES, samplePrices, slicePrices, toPath, type Range } from "@/lib/chart";
 
 type Ai =
   | { kind: "ok"; reason: Reason; explanation: string }
@@ -108,6 +109,16 @@ const ICONS = {
   help: "M9.5 9a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.5M12 17h.01M12 21a9 9 0 100-18 9 9 0 000 18z",
 };
 
+const Acc = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <details className="group rounded-2xl bg-white shadow-sm">
+    <summary className="flex cursor-pointer list-none items-center justify-between p-4 font-semibold [&::-webkit-details-marker]:hidden">
+      {title}
+      <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400 transition group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 5l7 7-7 7" /></svg>
+    </summary>
+    <div className="px-4 pb-4 text-sm text-slate-600">{children}</div>
+  </details>
+);
+
 const Logo = ({ name, color, size = 44 }: { name: string; color: string; size?: number }) => (
   <span className="flex shrink-0 items-center justify-center rounded-xl font-bold text-white" style={{ background: color, width: size, height: size, fontSize: size * 0.4 }}>
     {name.replace("Sample ", "").charAt(0)}
@@ -167,6 +178,10 @@ export default function Flow() {
   const [understood, setUnderstood] = useState(false);
   const [bank, setBank] = useState("Sample Bank A");
   const [paying, setPaying] = useState(false);
+  const [chartRange, setChartRange] = useState<Range>("3Y");
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [calcAmt, setCalcAmt] = useState(500);
+  const [calcMonths, setCalcMonths] = useState(12);
   type Msg = { from: "bot" | "me"; text: string; links?: { label: string; href: string }[]; tag?: string };
   const [chat, setChat] = useState<Msg[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -759,41 +774,108 @@ export default function Flow() {
         )}
 
         {/* ---------- FUND DETAIL ---------- */}
-        {screen === "fund" && fund && (
-          <>
-            <div className="flex items-center gap-3">
-              <Logo name={fund.name} color={fund.color} size={56} />
+        {screen === "fund" && fund && (() => {
+          const all = samplePrices(fund.id);
+          const pts = slicePrices(all, chartRange);
+          const W = 320, H = 140, PAD = 8;
+          const idx = hoverIdx === null ? pts.length - 1 : Math.min(hoverIdx, pts.length - 1);
+          const mn = Math.min(...pts), mx = Math.max(...pts);
+          const cx = PAD + (idx / (pts.length - 1)) * (W - PAD * 2);
+          const cy = H - PAD - ((pts[idx] - mn) / (mx - mn || 1)) * (H - PAD * 2);
+          const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const x = Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1);
+            setHoverIdx(Math.round(x * (pts.length - 1)));
+          };
+          return (
+            <>
+              <Logo name={fund.name} color={fund.color} size={52} />
               <div>
-                <p className="text-lg font-semibold leading-snug">{fund.name}</p>
-                <div className="mt-1 flex gap-2 text-xs">
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5">{fund.category}</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5">Risk: {fund.risk} (sample)</span>
+                <p className="text-xl font-semibold leading-snug">{fund.name}</p>
+                <p className="mt-1 text-sm text-slate-500">{fund.risk} Risk (sample) · {fund.category}</p>
+              </div>
+
+              <div className="rounded-2xl bg-white p-4 shadow-sm">
+                <p className="text-xs text-slate-500">Sample NAV (illustrative){hoverIdx !== null ? " at this point" : ""}</p>
+                <p className="text-2xl font-semibold">₹{pts[idx].toFixed(2)}</p>
+                <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 h-36 w-full touch-none" onPointerMove={onMove} onPointerLeave={() => setHoverIdx(null)} role="img" aria-label="Illustrative sample price chart">
+                  <path d={`${toPath(pts, W, H, PAD)} L${W - PAD} ${H} L${PAD} ${H} Z`} fill="rgba(13,148,136,0.08)" />
+                  <path d={toPath(pts, W, H, PAD)} fill="none" stroke="#0d9488" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                  <circle cx={cx} cy={cy} r="4" fill="#0d9488" stroke="white" strokeWidth="2" />
+                </svg>
+                <div className="mt-3 flex justify-center gap-1.5">
+                  {(Object.keys(RANGES) as Range[]).map((r) => (
+                    <button key={r} className={`rounded-full px-3.5 py-1.5 text-sm ${chartRange === r ? "border border-ink bg-slate-100 font-semibold" : "text-slate-500"}`} onClick={() => { setChartRange(r); setHoverIdx(null); }}>{r}</button>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] leading-snug text-slate-400">Illustrative sample data, not real fund performance. Values can fall as well as rise, and past performance does not predict future results.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-4 gap-y-5 px-1 text-sm">
+                <div><p className="text-slate-500">Sample NAV</p><p className="mt-1 text-lg font-semibold">₹{all[all.length - 1].toFixed(2)}</p></div>
+                <div><p className="text-slate-500">Rating</p><p className="mt-1 text-lg font-semibold">NA</p></div>
+                <div><p className="text-slate-500">Min. SIP amount</p><p className="mt-1 text-lg font-semibold">{inr(fund.min)} <span className="text-xs font-normal text-slate-400">(sample)</span></p></div>
+                <div><p className="text-slate-500">Fund size</p><p className="mt-1 text-lg font-semibold">₹{fund.sizeCr.toLocaleString("en-IN")} Cr <span className="text-xs font-normal text-slate-400">(sample)</span></p></div>
+              </div>
+
+              <div className="space-y-3">
+                <Acc title="SIP calculator">
+                  <p>How much you would put in:</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {[500, 1000, 2000].map((v) => (
+                      <button key={v} className={`chip ${calcAmt === v ? "border-calm bg-teal-50" : ""}`} onClick={() => setCalcAmt(v)}>{inr(v)} a month</button>
+                    ))}
+                  </div>
+                  <label className="mt-3 block text-xs text-slate-500" htmlFor="calc-m">For {calcMonths} months</label>
+                  <input id="calc-m" type="range" min={6} max={36} step={1} value={calcMonths} onChange={(e) => setCalcMonths(Number(e.target.value))} className="w-full accent-teal-600" />
+                  <p className="mt-2 text-base font-semibold text-ink">You would invest {inr(calcAmt * calcMonths)}</p>
+                  <p className="mt-1 text-xs text-slate-500">This is only what you put in. It is not a forecast of what it could become.</p>
+                </Acc>
+                <Acc title="Asset mix (sample)">
+                  <div className="flex h-3 overflow-hidden rounded-full bg-slate-200">
+                    <span className="bg-calm" style={{ width: `${fund.equityPct}%` }} />
+                  </div>
+                  <p className="mt-2">Shares {fund.equityPct}% · Other {100 - fund.equityPct}%</p>
+                  <p className="mt-1 text-xs text-slate-500">Sample split. The real holdings are listed on the fund&apos;s official factsheet.</p>
+                </Acc>
+                <Acc title="Returns & rankings">
+                  <p>Not shown in this prototype. Real returns and rankings change over time and do not predict the future. See the fund&apos;s official factsheet and the AMFI pages in Learn.</p>
+                </Acc>
+                <Acc title="Expense ratio, exit load & tax">
+                  <p>Expense ratio: {fund.expense} (sample)</p>
+                  <p>Exit load: {fund.exitLoad} (sample)</p>
+                  <p className="mt-1 text-xs text-slate-500">Gains can be taxed. The rules depend on the type of fund and how long you hold it, so check the official tax guidance.</p>
+                </Acc>
+                <Acc title="Fund management">
+                  <p>{fund.manager} (placeholder)</p>
+                </Acc>
+              </div>
+
+              <div>
+                <h2 className="mb-2 text-xl font-semibold">FAQs</h2>
+                <div className="space-y-3">
+                  {SUGGESTED.map((q) => (
+                    <Acc key={q.id} title={q.label}><p>{faqText(q.id, faqCtx)}</p></Acc>
+                  ))}
                 </div>
               </div>
-            </div>
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="font-medium">About this type of fund</p>
-              <p className="mt-1 text-sm text-slate-600">{fund.about}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-2xl bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">Minimum SIP</p><p className="font-semibold">{inr(fund.min)} (sample)</p></div>
-              <div className="rounded-2xl bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">You can</p><p className="font-semibold">Change, pause or stop any time</p></div>
-            </div>
-            <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm">
-              <p className="font-medium">Built-in safety net</p>
-              <p className="mt-1 text-slate-600">If a month gets tight, you can drop to the minimum for 1 to {MAX_HEARTBEAT_MONTHS} months instead of stopping.</p>
-            </div>
-            <button className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm" onClick={openHelp}>
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-50 text-calm"><Icon d={ICONS.help} /></span>
-              <span className="flex-1"><span className="block font-medium">AI Help</span><span className="block text-xs text-slate-500">Ask about this fund and how a SIP works</span></span>
-              <Icon d={ICONS.chevron} className="h-4 w-4 text-slate-400" />
-            </button>
-            <p className="text-xs text-slate-500">Returns are not shown. Past numbers do not predict the future. {NOT_ADVICE}</p>
-            <div className="sticky bottom-0 -mx-4 -mb-5 border-t bg-white p-4">
-              <button className="btn-primary w-full" onClick={() => { log("sip_setup_started"); go("sipSetup"); }}>Start a SIP</button>
-            </div>
-          </>
-        )}
+
+              <button className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm" onClick={openHelp}>
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-50 text-calm"><Icon d={ICONS.help} /></span>
+                <span className="flex-1"><span className="block font-medium">AI Help</span><span className="block text-xs text-slate-500">Ask about this fund and how a SIP works</span></span>
+                <Icon d={ICONS.chevron} className="h-4 w-4 text-slate-400" />
+              </button>
+              <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm">
+                <p className="font-medium">Built-in safety net</p>
+                <p className="mt-1 text-slate-600">If a month gets tight, you can drop to the minimum for 1 to {MAX_HEARTBEAT_MONTHS} months instead of stopping.</p>
+              </div>
+              <p className="text-xs text-slate-500">{NOT_ADVICE}</p>
+              <div className="sticky bottom-0 -mx-4 -mb-5 border-t bg-white p-4">
+                <button className="btn-primary w-full" onClick={() => { log("sip_setup_started"); go("sipSetup"); }}>Start SIP</button>
+              </div>
+            </>
+          );
+        })()}
 
         {/* ---------- SIP SETUP ---------- */}
         {screen === "sipSetup" && fund && (

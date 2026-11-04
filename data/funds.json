@@ -2,14 +2,19 @@
   "categories": ["All", "Small Cap", "Mid Cap", "Index", "Multi Asset", "Flexi Cap"],
   "funds": [
     { "id": "f1", "name": "Sample Flexi Cap Fund", "category": "Flexi Cap", "min": 100, "risk": "Very High", "color": "#0d9488",
+      "sizeCr": 1250, "expense": "0.6%", "exitLoad": "Nil after 1 year", "equityPct": 92, "manager": "Sample Manager A",
       "about": "A flexi cap fund can hold companies of different sizes. How it is split is decided by the fund manager." },
     { "id": "f2", "name": "Sample Index Fund", "category": "Index", "min": 100, "risk": "Very High", "color": "#6366f1",
+      "sizeCr": 3400, "expense": "0.2%", "exitLoad": "Nil", "equityPct": 99, "manager": "Sample Manager B",
       "about": "An index fund follows a market index instead of picking companies one by one. Its value moves with that index." },
     { "id": "f3", "name": "Sample Mid Cap Fund", "category": "Mid Cap", "min": 500, "risk": "Very High", "color": "#d97706",
+      "sizeCr": 860, "expense": "0.7%", "exitLoad": "Nil after 1 year", "equityPct": 94, "manager": "Sample Manager C",
       "about": "A mid cap fund mainly holds medium-sized companies. Its value can move up and down more than many other types." },
     { "id": "f4", "name": "Sample Multi Asset Fund", "category": "Multi Asset", "min": 100, "risk": "Very High", "color": "#0891b2",
+      "sizeCr": 640, "expense": "0.5%", "exitLoad": "Nil after 1 year", "equityPct": 65, "manager": "Sample Manager D",
       "about": "A multi asset fund spreads money across more than one kind of asset, such as shares and bonds." },
     { "id": "f5", "name": "Sample Small Cap Fund", "category": "Small Cap", "min": 100, "risk": "Very High", "color": "#be123c",
+      "sizeCr": 970, "expense": "0.6%", "exitLoad": "Nil after 1 year", "equityPct": 95, "manager": "Sample Manager E",
       "about": "A small cap fund mainly holds smaller companies. Its value can move up and down a lot." }
   ]
 }
