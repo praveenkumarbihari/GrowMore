@@ -1,14 +1,18 @@
 import { AI_TIMEOUT_MS } from "./config";
+import { AiError, logAiFailure, sanitize, toAiError } from "./aiError";
 import { AiOutputSchema, type AiOutput } from "./schema";
 import { checkInput, checkOutput } from "./safety";
 
-export type FallbackWhy = "no_key" | "timeout" | "error" | "schema" | "low_confidence" | "unsafe_output";
+export type FallbackWhy =
+  | "no_key" | "timeout" | "error" | "schema" | "low_confidence" | "unsafe_output" | "rate_limited" | "bad_request";
+/** "unsure": the AI chose not to answer. "service": the AI service failed. */
+export type FallbackCause = "unsure" | "service";
 
 export type ExplainResult =
   | { kind: "blocked"; message: string }
   | { kind: "ok"; reason: AiOutput["reason"]; language: AiOutput["language"]; explanation: string; confidence: number }
   | { kind: "decline"; reason: "wants_advice"; language: AiOutput["language"]; explanation: string }
-  | { kind: "fallback"; why: FallbackWhy };
+  | { kind: "fallback"; why: FallbackWhy; cause: FallbackCause };
 
 export type SipContext = { amount: number; month: number; totalMonths: number; status: string };
 export type ModelCall = (text: string, sip: SipContext) => Promise<unknown>;
@@ -49,8 +53,23 @@ export function parseJsonText(content: string): unknown {
   return JSON.parse(start >= 0 && end > start ? content.slice(start, end + 1) : content);
 }
 
+/** Reads the provider's error message from a failed response without keeping the raw body. */
+async function providerMessage(res: Response): Promise<string | undefined> {
+  try {
+    const body = (await res.text()).slice(0, 2000);
+    try {
+      const j = JSON.parse(body);
+      return sanitize(j?.error?.message ?? j?.message ?? j?.error ?? body);
+    } catch {
+      return sanitize(body);
+    }
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * Shared JSON call to the configured model. Throws "no_key" when unconfigured.
+ * Shared JSON call to the configured model. Throws an AiError describing what went wrong.
  * AI_API_STYLE=responses (default) uses POST {base}/responses (OpenRouter Responses API);
  * AI_API_STYLE=chat uses POST {base}/chat/completions.
  */
@@ -58,14 +77,14 @@ export async function chatJson(system: string, user: string): Promise<unknown> {
   const key = process.env.AI_API_KEY;
   const base = process.env.AI_BASE_URL;
   const model = process.env.AI_MODEL;
-  if (!key || !base || !model) throw new Error("no_key");
+  if (!key || !base || !model) throw new AiError("config");
   const chat = process.env.AI_API_STYLE === "chat";
   const messages = [
     { role: "system", content: system },
     { role: "user", content: user },
   ];
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), Number(process.env.AI_TIMEOUT_MS) || AI_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = { "content-type": "application/json", authorization: `Bearer ${key}` };
     // Optional OpenRouter attribution headers.
@@ -81,8 +100,19 @@ export async function chatJson(system: string, user: string): Promise<unknown> {
           : { model, input: messages, max_output_tokens: 400 },
       ),
     });
-    if (!res.ok) throw new Error(`http_${res.status}`);
-    return parseJsonText(extractText(await res.json()));
+    if (!res.ok) throw new AiError("http", res.status, await providerMessage(res));
+    const data = await res.json().catch(() => {
+      throw new AiError("parse");
+    });
+    const text = extractText(data);
+    if (!text.trim()) throw new AiError("empty");
+    try {
+      return parseJsonText(text);
+    } catch {
+      throw new AiError("parse");
+    }
+  } catch (e) {
+    throw toAiError(e);
   } finally {
     clearTimeout(timer);
   }
@@ -102,6 +132,9 @@ export const DECLINE_TEXT: Record<AiOutput["language"], string> = {
     "Hum yeh nahi bata sakte ki kya kharidein ya SIP chalu rakhein ya nahi. Yeh aapka apna faisla hai, aur yahan kuch bhi advice nahi hai.",
 };
 
+const SERVICE = (why: FallbackWhy): ExplainResult => ({ kind: "fallback", why, cause: "service" });
+const UNSURE = (why: FallbackWhy): ExplainResult => ({ kind: "fallback", why, cause: "unsure" });
+
 /** Runs the safety layers in order. Any failure returns a fallback. */
 export async function explain(
   raw: string,
@@ -115,23 +148,26 @@ export async function explain(
   try {
     parsed = await call(input.text, sip);
   } catch (e) {
-    if (e instanceof Error && e.message === "no_key") return { kind: "fallback", why: "no_key" };
-    if (e instanceof Error && e.name === "AbortError") return { kind: "fallback", why: "timeout" };
-    return { kind: "fallback", why: "error" };
+    const err = toAiError(e);
+    logAiFailure("explain", err);
+    if (err.type === "config") return SERVICE("no_key");
+    if (err.type === "timeout") return SERVICE("timeout");
+    return SERVICE("error");
   }
 
   const out = AiOutputSchema.safeParse(parsed);
-  if (!out.success) return { kind: "fallback", why: "schema" };
+  if (!out.success) {
+    logAiFailure("explain", new AiError("schema"));
+    return SERVICE("schema");
+  }
   const o = out.data;
 
-  if (o.confidence < Number(process.env.AI_CONFIDENCE_MIN ?? 0.7)) {
-    return { kind: "fallback", why: "low_confidence" };
-  }
+  if (o.confidence < Number(process.env.AI_CONFIDENCE_MIN ?? 0.7)) return UNSURE("low_confidence");
   // wants_advice always declines, using fixed text rather than model text.
   if (o.reason === "wants_advice") {
     return { kind: "decline", reason: "wants_advice", language: o.language, explanation: DECLINE_TEXT[o.language] };
   }
-  if (!checkOutput(o.explanation).ok) return { kind: "fallback", why: "unsafe_output" };
+  if (!checkOutput(o.explanation).ok) return UNSURE("unsafe_output");
 
   return { kind: "ok", reason: o.reason, language: o.language, explanation: o.explanation, confidence: o.confidence };
 }

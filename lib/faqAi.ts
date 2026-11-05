@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { chatJson } from "./ai";
+import { logAiFailure } from "./aiError";
 import { LEARN_LINKS } from "./config";
 import { answer, faqText, UNKNOWN_TEXT, type FaqCtx, type FaqReply } from "./faq";
 import { checkInput } from "./safety";
@@ -28,7 +29,9 @@ export async function answerWithAi(
     if (pick.id === "advice") return { kind: "decline", text: faqText("advice", c), links: LEARN_LINKS, viaAi: true };
     if (pick.id === "unknown") return { kind: "unknown", text: UNKNOWN_TEXT, viaAi: true };
     return { kind: "answer", id: pick.id, text: faqText(pick.id, c), viaAi: true };
-  } catch {
+  } catch (e) {
+    // A low-confidence pick is expected; anything else is a real failure worth logging.
+    if (!(e instanceof Error && e.message === "low_confidence")) logAiFailure("faq", e);
     return { ...answer(input.text, c), viaAi: false };
   }
 }

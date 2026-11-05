@@ -35,17 +35,17 @@ describe("explain pipeline", () => {
     if (r.kind === "decline") expect(r.explanation).not.toContain("XYZ");
   });
   it("unclear low confidence falls back", async () =>
-    expect(await explain("hmm", sip, good({ reason: "unclear", confidence: 0.3 }))).toEqual({ kind: "fallback", why: "low_confidence" }));
+    expect(await explain("hmm", sip, good({ reason: "unclear", confidence: 0.3 }))).toEqual({ kind: "fallback", why: "low_confidence", cause: "unsure" }));
   it("bad schema falls back", async () =>
-    expect(await explain("x y", sip, async () => ({ reason: "nope" }))).toEqual({ kind: "fallback", why: "schema" }));
+    expect(await explain("x y", sip, async () => ({ reason: "nope" }))).toEqual({ kind: "fallback", why: "schema", cause: "service" }));
   it("over 40 words falls back", async () =>
     expect((await explain("x y", sip, good({ explanation: "word ".repeat(41) }))).kind).toBe("fallback"));
   it("unsafe output falls back", async () =>
-    expect(await explain("x y", sip, good({ explanation: "This is guaranteed to help." }))).toEqual({ kind: "fallback", why: "unsafe_output" }));
+    expect(await explain("x y", sip, good({ explanation: "This is guaranteed to help." }))).toEqual({ kind: "fallback", why: "unsafe_output", cause: "unsure" }));
   it("timeout falls back", async () =>
-    expect(await explain("x y", sip, async () => { const e = new Error("t"); e.name = "AbortError"; throw e; })).toEqual({ kind: "fallback", why: "timeout" }));
+    expect(await explain("x y", sip, async () => { const e = new Error("t"); e.name = "AbortError"; throw e; })).toEqual({ kind: "fallback", why: "timeout", cause: "service" }));
   it("model error falls back", async () =>
-    expect(await explain("x y", sip, async () => { throw new Error("http_500"); })).toEqual({ kind: "fallback", why: "error" }));
+    expect(await explain("x y", sip, async () => { throw new Error("http_500"); })).toEqual({ kind: "fallback", why: "error", cause: "service" }));
   it("blocked input never calls the model", async () => {
     let called = false;
     const r = await explain("ABCDE1234F", sip, async () => { called = true; return {}; });

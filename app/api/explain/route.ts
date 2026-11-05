@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { explain } from "@/lib/ai";
+import { AiError, logAiFailure } from "@/lib/aiError";
 import { allow } from "@/lib/ratelimit";
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
+  // Behind Nginx the client IP arrives in x-forwarded-for / x-real-ip.
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || req.headers.get("x-real-ip") || "local";
   if (!allow(ip)) {
-    // Rate limited: same safe fallback the user would see on any AI failure.
-    return NextResponse.json({ kind: "fallback", why: "error" });
+    logAiFailure("explain", new AiError("rate_limited"));
+    return NextResponse.json({ kind: "fallback", why: "rate_limited", cause: "service" });
   }
   let body: { text?: unknown; sip?: { amount?: number; month?: number; totalMonths?: number; status?: string } };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ kind: "fallback", why: "error" });
+    return NextResponse.json({ kind: "fallback", why: "bad_request", cause: "service" });
   }
   const text = typeof body.text === "string" ? body.text : "";
+  // Only the fields the model needs; nothing else is forwarded.
   const sip = {
     amount: Number(body.sip?.amount) || 1000,
     month: Number(body.sip?.month) || 4,

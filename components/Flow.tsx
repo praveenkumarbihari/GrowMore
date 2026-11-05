@@ -18,7 +18,7 @@ import { RANGES, samplePrices, slicePrices, toPath, type Range } from "@/lib/cha
 type Ai =
   | { kind: "ok"; reason: Reason; explanation: string }
   | { kind: "decline"; reason: Reason; explanation: string }
-  | { kind: "fallback"; why: string }
+  | { kind: "fallback"; why: string; cause?: "unsure" | "service" }
   | { kind: "blocked"; message: string };
 
 type Screen =
@@ -256,7 +256,7 @@ export default function Flow() {
       fallbackRef.current = data.kind === "fallback";
       log("ai_result", { option: data.kind });
     } catch {
-      setAi({ kind: "fallback", why: "error" });
+      setAi({ kind: "fallback", why: "error", cause: "service" });
       fallbackRef.current = true;
       reasonRef.current = "unclear";
     }
@@ -1254,7 +1254,11 @@ export default function Flow() {
             )}
             {ai.kind === "fallback" && (
               <p className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-                I&apos;m not sure about this one, so here are your options. <span className="text-xs text-slate-500">(The AI step stepped back on purpose.)</span>
+                {ai.cause === "service" ? (
+                  "We can't explain this right now, so here are your options."
+                ) : (
+                  <>I&apos;m not sure about this one, so here are your options. <span className="text-xs text-slate-500">(The AI stepped back on purpose.)</span></>
+                )}
               </p>
             )}
             {ai.kind === "blocked" && <p className="rounded-lg border border-amber-300 bg-amber-50 p-4">{ai.message}</p>}
