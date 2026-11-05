@@ -64,7 +64,6 @@ const LEARN: Record<"en" | "hi" | "hinglish", [string, string][]> = {
   ],
 };
 
-const EXIT_REASONS = ["Money is tight", "Market worries", "I need the money", "Don't understand it", "Something else"];
 const REASON_CHIPS = ["My first bike", "A safety cushion", "A trip", "Education", "Something else"];
 
 const OPTION_TEXT: Record<OptionId, { title: string; body: string }> = {
@@ -163,7 +162,6 @@ export default function Flow() {
   const [alerts, setAlerts] = useState<Record<Channel, boolean>>(NO_ALERTS);
   const [leadDays, setLeadDays] = useState(2);
   const [lang, setLang] = useState<"en" | "hi" | "hinglish">("en");
-  const [exitReason, setExitReason] = useState<string | null>(null);
 
   // Explore / purchase journey state
   const [category, setCategory] = useState("All");
@@ -357,7 +355,6 @@ export default function Flow() {
       setSipDay(day);
       setReasonNote(note);
       setPaying(false);
-      setExitReason(null);
       log("sip_created", { option: String(amount) });
       setHist([]);
       setScreen("sipDone");
@@ -1359,28 +1356,21 @@ export default function Flow() {
         {screen === "stop" && (
           <>
             <h1 className="text-xl font-semibold">Stop this SIP?</h1>
-            <p className="text-sm">Your sample SIP will end. You can start a new one whenever you like.</p>
-            <button className="btn-primary w-full" onClick={back}>Keep my SIP</button>
-            <button className="w-full py-2 text-sm text-slate-500 underline-offset-2 hover:underline" onClick={() => { setSip(stopSip(sip)); log("stop_confirmed", { option: "stop" }); reset("stopped"); }}>
+            <p className="text-sm">Your sample SIP will end. Money already invested stays invested. You can start a new one whenever you like.</p>
+            <button className="btn-primary w-full border-2 border-calm" onClick={back}>Keep my SIP</button>
+            <button className="w-full rounded-full border-2 border-slate-600 bg-white px-4 py-3 font-semibold text-ink" onClick={() => { setSip(stopSip(sip)); log("stop_confirmed", { option: "stop" }); reset("stopped"); }}>
               Yes, stop it
+            </button>
+            <button className="w-full py-2 text-sm text-slate-600 underline-offset-2 hover:underline" onClick={() => { log("see_options_from_stop"); setAi(null); go("options"); }}>
+              See my options
             </button>
           </>
         )}
 
         {screen === "stopped" && (
           <>
-            <h1 className="text-xl font-semibold">Your SIP is stopped</h1>
-            <p className="text-sm">Nothing more is needed.</p>
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-sm font-medium">Why did you stop? (optional)</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {EXIT_REASONS.map((r) => (
-                  <button key={r} className={`chip ${exitReason === r ? "border-calm bg-teal-50" : ""}`} onClick={() => { setExitReason(r); log("exit_reason", { option: r.slice(0, 30) }); }}>{r}</button>
-                ))}
-              </div>
-              {exitReason && <p className="mt-2 text-xs text-slate-500">Thank you. This only helps us improve.</p>}
-            </div>
-            <button className="btn-primary w-full" onClick={() => go("feedback")}>Continue</button>
+            <p className="text-xl font-semibold">Your SIP is stopped. Your invested money stays invested.</p>
+            <button className="btn-secondary w-full" onClick={() => reset("dashboard")}>Back to home</button>
           </>
         )}
 
